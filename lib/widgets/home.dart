@@ -1,6 +1,7 @@
+import 'package:firebase_admob/firebase_admob.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:hufs_lecture_alarm/widgets/lifecycleListener.dart';
+import 'package:hufs_lecture_alarm/utils/lifecycleListener.dart';
 import 'package:provider/provider.dart';
 import 'package:toast/toast.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -24,13 +25,11 @@ class _HomeWidgetState extends State<HomeWidget> {
 
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-    WidgetsBinding.instance.addObserver(LifecycleEventHandler(
-      resumeCallBack: () {
-        final alarm = Provider.of<Alarm>(context);
-        return alarm.loadMyAlarms();
-      },
-      suspendingCallBack: () async {},
-    ));
+    WidgetsBinding.instance
+        .addObserver(LifecycleEventHandler(resumeCallBack: () {
+      final alarm = Provider.of<Alarm>(context);
+      return alarm.loadMyAlarms();
+    }));
 
     _firebaseMessaging.getToken().then((token) {
       print(token);
@@ -41,36 +40,29 @@ class _HomeWidgetState extends State<HomeWidget> {
     });
 
     _firebaseMessaging.configure(
-      onMessage: (Map<String, dynamic> message) async {
-        final alarm = Provider.of<Alarm>(context);
-        alarm.loadMyAlarms();
+        onMessage: (Map<String, dynamic> message) async {
+      final alarm = Provider.of<Alarm>(context);
+      alarm.loadMyAlarms();
 
-        print("onMessage: $message");
+      print("onMessage: $message");
 
-        FlutterRingtonePlayer.playNotification();
+      FlutterRingtonePlayer.playNotification();
 
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            content: ListTile(
-              title: Text(message['notification']['title']),
-            ),
-            actions: <Widget>[
-              FlatButton(
-                child: Text('Ok'),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          content: ListTile(
+            title: Text(message['notification']['title']),
           ),
-        );
-      },
-      onLaunch: (Map<String, dynamic> message) async {
-        print("onLaunch: $message");
-      },
-      onResume: (Map<String, dynamic> message) async {
-        print("onResume: $message");
-      },
-    );
+          actions: <Widget>[
+            FlatButton(
+              child: Text('Ok'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   Widget build(BuildContext context) {
@@ -79,6 +71,27 @@ class _HomeWidgetState extends State<HomeWidget> {
     return Scaffold(
       appBar: AppBar(
         title: Text('한국외대 강의 빈자리 알람'),
+        actions: <Widget>[
+          IconButton(
+            icon: Icon(Icons.card_giftcard),
+            onPressed: () async {
+              await RewardedVideoAd.instance
+                  .load(adUnitId: 'ca-app-pub-3940256099942544/8691691433');
+
+              RewardedVideoAd.instance.listener = (RewardedVideoAdEvent event,
+                  {String rewardType, int rewardAmount}) {
+                if (event == RewardedVideoAdEvent.rewarded) {
+                  setState(() {
+                    alarm.incrementAlarmLimit(rewardAmount);
+                    print('Alarm Limit: $alarm.alarmLimit');
+                  });
+                }
+              };
+
+              RewardedVideoAd.instance.show();
+            },
+          )
+        ],
       ),
       body: ListView(
         padding: EdgeInsets.all(12.0),
@@ -106,7 +119,7 @@ class _HomeWidgetState extends State<HomeWidget> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: alarm.alarmLimit
+        backgroundColor: alarm.hitAlarmLimit
             ? Colors.grey[300]
             : Theme.of(context).primaryColor,
         elevation: 4.0,
@@ -115,7 +128,7 @@ class _HomeWidgetState extends State<HomeWidget> {
           '알람 추가하기',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        onPressed: alarm.alarmLimit
+        onPressed: alarm.hitAlarmLimit
             ? null
             : () {
                 Navigator.push(
